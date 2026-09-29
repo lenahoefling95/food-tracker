@@ -422,6 +422,46 @@
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+  /* PREVIEW ITEMS */
+  .preview-name-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    outline: none;
+    margin-bottom: 10px;
+  }
+  .preview-name-input:focus { border-color: var(--accent-dim); }
+  .item-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .item-row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+  .item-row-name { flex: 1; color: var(--text); }
+  .item-row-amount { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+  .item-row-kcal { color: var(--text-mid); white-space: nowrap; min-width: 64px; text-align: right; }
+  .item-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+  .item-badge.db { background: var(--green-faint); color: var(--green); border: 1px solid var(--green); }
+  .item-badge.est { background: var(--accent-faint); color: var(--accent); border: 1px solid var(--accent-dim); }
+
+  /* LABEL SCAN */
+  .btn-scan {
+    width: 100%;
+    background: var(--surface);
+    border: 1px dashed var(--accent-dim);
+    border-radius: 6px;
+    padding: 10px;
+    color: var(--accent);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .btn-scan:disabled { opacity: 0.5; cursor: wait; }
+  .form-hint { font-size: 11px; color: var(--text-dim); margin: -4px 0 10px; }
 </style>
 </head>
 <body>
@@ -480,9 +520,12 @@
         oninput="autoResize(this)"></textarea>
       <button class="btn-log" id="logBtn" onclick="parseFood()">Einloggen</button>
     </div>
+    <button class="btn-scan" id="shotBtn" style="margin:8px 0 0" onclick="document.getElementById('shotInput').click()">Aus Screenshot oder Foto einlesen</button>
+    <input type="file" id="shotInput" accept="image/*" style="display:none" onchange="readListFromImage(this)">
     <div class="parse-preview" id="parsePreview">
-      <div class="parse-preview-title">Gefunden — stimmt das?</div>
-      <div class="parse-food-name" id="previewName"></div>
+      <div class="parse-preview-title">Gefunden, stimmt das?</div>
+      <input type="text" class="preview-name-input" id="previewName" placeholder="Name des Eintrags">
+      <div class="item-list" id="previewItems"></div>
       <div class="macro-row">
         <div class="macro-field"><label>kcal</label><input type="number" id="pvKcal" min="0" step="0.1"></div>
         <div class="macro-field"><label>Eiweiß (g)</label><input type="number" id="pvProtein" min="0" step="0.1"></div>
@@ -490,8 +533,8 @@
         <div class="macro-field"><label>Zucker (g)</label><input type="number" id="pvSugar" min="0" step="0.1"></div>
       </div>
       <div class="save-to-foods-row" id="saveToFoodsRow">
-        <input type="checkbox" id="saveToFoods" checked>
-        <label for="saveToFoods">Als Lebensmittel speichern</label>
+        <input type="checkbox" id="saveToFoods">
+        <label for="saveToFoods" id="saveToFoodsLabel">Geschätzte Lebensmittel speichern</label>
       </div>
       <div class="preview-btns">
         <button class="btn-confirm" onclick="confirmEntry()">Eintragen</button>
@@ -557,15 +600,18 @@
   <hr class="divider">
   <div class="add-food-form">
     <div class="form-title">Neues Lebensmittel</div>
+    <button class="btn-scan" id="scanBtn" onclick="document.getElementById('scanInput').click()">Nährwert-Etikett fotografieren</button>
+    <input type="file" id="scanInput" accept="image/*" capture="environment" style="display:none" onchange="scanLabel(this)">
     <div class="form-row">
-      <div class="form-field wide"><label>Name</label><input type="text" id="fName" placeholder="Rinderhack"></div>
-      <div class="form-field narrow"><label>Menge (g)</label><input type="number" id="fAmount" placeholder="100" value="100"></div>
+      <div class="form-field wide"><label>Name</label><input type="text" id="fName" placeholder="Magerquark Kaufland"></div>
+      <div class="form-field narrow"><label>Portion (g)</label><input type="number" id="fAmount" placeholder="100" value="100"></div>
     </div>
+    <div class="form-hint">Nährwerte immer pro 100 g bzw. 100 ml, wie auf der Packung. Die Portion ist deine übliche Menge, z.B. 25 g für einen Scoop.</div>
     <div class="form-row">
-      <div class="form-field narrow"><label>kcal</label><input type="number" id="fKcal" placeholder="0"></div>
-      <div class="form-field narrow"><label>Eiweiß (g)</label><input type="number" id="fProtein" placeholder="0"></div>
-      <div class="form-field narrow"><label>KH (g)</label><input type="number" id="fCarbs" placeholder="0"></div>
-      <div class="form-field narrow"><label>Zucker (g)</label><input type="number" id="fSugar" placeholder="0"></div>
+      <div class="form-field narrow"><label>kcal /100g</label><input type="number" id="fKcal" placeholder="0" step="0.1"></div>
+      <div class="form-field narrow"><label>Eiweiß /100g</label><input type="number" id="fProtein" placeholder="0" step="0.1"></div>
+      <div class="form-field narrow"><label>KH /100g</label><input type="number" id="fCarbs" placeholder="0" step="0.1"></div>
+      <div class="form-field narrow"><label>Zucker /100g</label><input type="number" id="fSugar" placeholder="0" step="0.1"></div>
     </div>
     <button class="btn-add-food" onclick="addFood()">Speichern</button>
   </div>
@@ -609,7 +655,11 @@ async function sbFetch(path, method = 'GET', body = null, extra = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-const TODAY = new Date().toISOString().slice(0, 10);
+// Lokales Datum (nicht UTC), sonst landen Einträge zwischen 0 und 2 Uhr beim Vortag
+function localDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const TODAY = localDateStr();
 let todayEntries = [], allFoods = [], isException = false;
 let pendingEntry = null, pendingIsNewFood = false, todayTdee = null;
 
@@ -629,13 +679,13 @@ function getLast7Days() {
   const days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
+    days.push(localDateStr(d));
   }
   return days;
 }
 function dateOffset(dateStr, offset) {
   const d = new Date(dateStr + 'T12:00:00'); d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 // FOODS
@@ -647,11 +697,15 @@ function renderFoodList() {
   const el = document.getElementById('foodList');
   if (!allFoods.length) { el.innerHTML = '<div class="empty-state">Keine Lebensmittel gespeichert.</div>'; return; }
   el.innerHTML = allFoods.map(f => `<div class="food-item">
-    <span class="food-item-name">${f.name}</span>
-    <span class="food-item-meta">${f.default_amount_g}g · ${f.kcal} kcal</span>
+    <span class="food-item-name">${escapeHtml(f.name)}</span>
+    <span class="food-item-meta">${f.kcal} kcal/100g · Portion ${f.default_amount_g}g</span>
     <button class="food-item-delete" onclick="deleteFood('${f.id}')">×</button>
   </div>`).join('');
 }
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+// Alle Nährwerte in "foods" sind PRO 100 g. default_amount_g ist nur die übliche Portion (z.B. 1 Scoop = 25 g).
 async function addFood() {
   const name = document.getElementById('fName').value.trim();
   if (!name) { showToast('Bitte einen Namen eingeben.', 'err'); return; }
@@ -678,7 +732,7 @@ function renderEntries() {
   const el = document.getElementById('entryList');
   if (!todayEntries.length) { el.innerHTML = '<div class="empty-state">Noch nichts eingetragen.</div>'; return; }
   el.innerHTML = todayEntries.map(e => `<div class="entry-item">
-    <span class="entry-name">${e.food_name}${e.amount_g ? ` <span style="color:var(--text-dim);font-size:12px">(${e.amount_g}g)</span>` : ''}</span>
+    <span class="entry-name">${escapeHtml(e.food_name)}${e.amount_g ? ` <span style="color:var(--text-dim);font-size:12px">(${e.amount_g}g)</span>` : ''}</span>
     <span class="entry-kcal">${Math.round(e.kcal)} kcal</span>
     <button class="entry-delete" onclick="deleteEntry('${e.id}')">×</button>
   </div>`).join('');
@@ -747,45 +801,173 @@ async function toggleException() {
   updateExceptionUI();
 }
 
-// GEMINI
-// Try to match input locally against foods DB before calling Gemini
-function tryLocalMatch(input) {
-  // Parse amount from input, e.g. "450ml", "200g", "3 Eier", "1 Scoop"
-  const amountMatch = input.match(/([\d.,]+)\s*(g|ml|stück|stk|scoop|scoops)?/i);
-  const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : null;
+// ─────────────────────────────────────────────────────────────
+// PARSING
+// Eine Eingabe kann mehrere Lebensmittel enthalten (z.B. eine Liste
+// mit einer Zeile pro Zutat). Jede Zutat wird einzeln aufgelöst:
+//  1. lokal gegen die Lebensmittel-DB (exakte Packungswerte, kein API-Call)
+//  2. wenn etwas nicht lokal passt: Gemini ordnet Zutaten DB-Einträgen zu
+//     und schätzt nur, was wirklich nicht in der DB steht.
+// Gerechnet wird immer lokal mit Werten pro 100 g.
+// ─────────────────────────────────────────────────────────────
 
-  const inputLower = input.toLowerCase();
+const MASS_UNITS = { g: 1, gr: 1, gramm: 1, ml: 1, kg: 1000, l: 1000 };
+const COUNT_UNITS = /^(scoops?|messl[öo]ffel|ml[öo]ffel|stück|stk\.?|portionen?|port\.?|x|el|tl|scheiben?)$/i;
 
-  // Find all foods whose name appears in input as a whole word/phrase
-  // Use space/start/end boundaries to avoid "ei" matching inside "weißkäse"
-  const matches = allFoods
-    .filter(f => {
-      const name = f.name.toLowerCase();
-      // Check: name appears preceded and followed by non-letter or string boundary
-      const idx = inputLower.indexOf(name);
-      if (idx === -1) return false;
-      const before = idx === 0 ? true : !/[a-zäöüß]/.test(inputLower[idx - 1]);
-      const after = (idx + name.length) >= inputLower.length ? true : !/[a-zäöüß]/.test(inputLower[idx + name.length]);
-      return before && after;
-    })
-    .sort((a, b) => b.name.length - a.name.length); // longest match wins
+function normalize(s) {
+  return String(s || '').toLowerCase().replace(/[.,:;()]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function wordIn(hay, needle) {
+  if (!needle) return false;
+  const idx = hay.indexOf(needle);
+  if (idx === -1) return false;
+  const before = idx === 0 || !/[a-zäöüß]/.test(hay[idx - 1]);
+  const end = idx + needle.length;
+  const after = end >= hay.length || !/[a-zäöüß]/.test(hay[end]);
+  return before && after;
+}
+function round1(x) { return Math.round((x || 0) * 10) / 10; }
 
-  if (matches.length >= 1 && amount !== null) {
-    const food = matches[0]; // take the most specific match
-    const factor = amount / food.default_amount_g;
-    return {
-      food_name: `${food.name} (${amount}g)`,
-      amount_g: amount,
-      kcal: Math.round(food.kcal * factor * 10) / 10,
-      carbs: Math.round(food.carbs * factor * 10) / 10,
-      protein: Math.round(food.protein * factor * 10) / 10,
-      sugar: Math.round(food.sugar * factor * 10) / 10,
-      is_new_food: false,
-      matched_food_name: food.name,
-      _localMatch: true
-    };
+// Eingabe in einzelne Zutaten zerlegen (Zeilen, Semikolon, "+", " und ", Komma ohne Zahl danach)
+function splitItems(input) {
+  return input
+    .split(/\n|;|\s\+\s|\s+und\s+|,(?!\d)/i)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+// "250g Quark", "Quark 250 g", "1,5 Scoops Iced Coffee", "2 Eier"
+function parseItem(s) {
+  let num, unit = '', name = '';
+  let m = s.match(/^(\d+(?:[.,]\d+)?)\s*([a-zäöüß]+\.?)?\s*(.*)$/i);
+  if (m) {
+    num = m[1]; unit = m[2] || ''; name = m[3] || '';
+  } else {
+    m = s.match(/^(.*?)\s+(\d+(?:[.,]\d+)?)\s*([a-zäöüß]+\.?)?$/i);
+    if (!m) return null;
+    name = m[1]; num = m[2]; unit = m[3] || '';
   }
+  const value = parseFloat(num.replace(',', '.'));
+  const u = unit.toLowerCase().replace(/\.$/, '');
+  if (MASS_UNITS[u]) return { name: name.trim(), grams: value * MASS_UNITS[u], count: null };
+  if (COUNT_UNITS.test(unit)) return { name: name.trim(), grams: null, count: value };
+  // Unbekannte "Einheit" gehört zum Namen, z.B. "2 Eier"
+  return { name: `${unit} ${name}`.trim(), grams: null, count: value };
+}
+
+function findFood(name) {
+  const n = normalize(name);
+  if (!n) return null;
+  const foods = allFoods.map(f => ({ f, fn: normalize(f.name) }));
+  const exact = foods.find(x => x.fn === n);
+  if (exact) return exact.f;
+  // DB-Name steckt in der Eingabe ("magerquark kaufland" in "250g magerquark kaufland frisch")
+  const inInput = foods.filter(x => wordIn(n, x.fn)).sort((a, b) => b.fn.length - a.fn.length);
+  if (inInput.length) return inInput[0].f;
+  // Eingabe steckt in genau einem DB-Namen ("salata" in "salata kühne")
+  const inDb = foods.filter(x => wordIn(x.fn, n));
+  if (inDb.length === 1) return inDb[0].f;
   return null;
+}
+
+function itemFromFood(food, grams, label) {
+  const g = grams / 100;
+  return {
+    name: food.name,
+    amount_g: round1(grams),
+    kcal: round1(food.kcal * g),
+    carbs: round1(food.carbs * g),
+    protein: round1(food.protein * g),
+    sugar: round1(food.sugar * g),
+    source: 'db'
+  };
+}
+
+// Versucht die ganze Eingabe ohne API zu lösen. Gibt null zurück, sobald eine Zutat unklar ist.
+function tryLocalItems(input) {
+  const parts = splitItems(input);
+  if (!parts.length) return null;
+  const items = [];
+  for (const part of parts) {
+    const p = parseItem(part);
+    if (!p) return null;
+    const food = findFood(p.name);
+    if (!food) return null;
+    const grams = p.grams !== null ? p.grams : p.count * (parseFloat(food.default_amount_g) || 100);
+    if (!grams) return null;
+    items.push(itemFromFood(food, grams));
+  }
+  return items;
+}
+
+async function callGemini(parts) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.1 }
+    })
+  });
+  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  const raw = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+  if (!raw) throw new Error('Leere Antwort von Gemini');
+  const jsonMatch = raw.match(/[\[{][\s\S]*[\]}]/);
+  if (!jsonMatch) throw new Error('Kein JSON in Antwort');
+  return JSON.parse(jsonMatch[0]);
+}
+
+async function geminiItems(input) {
+  const foodsCtx = allFoods.length
+    ? allFoods.map(f => `- "${f.name}": ${f.kcal} kcal, ${f.carbs} g KH, ${f.protein} g Eiweiß, ${f.sugar} g Zucker pro 100 g; Portion ${f.default_amount_g} g`).join('\n')
+    : '(leer)';
+
+  const prompt = `Du bist ein Ernährungs-Assistent. Zerlege die Eingabe in einzelne Lebensmittel mit Menge.
+
+Lebensmittel-Datenbank der Nutzerin (Werte sind exakte Packungsangaben pro 100 g bzw. 100 ml):
+${foodsCtx}
+
+Eingabe:
+"""
+${input}
+"""
+
+Regeln:
+1. Jede Zutat wird ein eigenes Item.
+2. Passt eine Zutat zu einem DB-Eintrag (auch bei Abkürzungen, Tippfehlern, Singular/Plural, z.B. "k. Frischkäse" = "Körniger Frischkäse"), setze "db_name" EXAKT auf den DB-Namen und "per100" auf null. Rechne DB-Werte nicht selbst.
+3. Mengen immer in Gramm angeben. ml ≈ g. Bei Scoop/Stück/Portion eines DB-Eintrags: Anzahl × Portion. Bei Eiern ohne Gewicht: 1 Ei ≈ 55 g.
+4. Nur wenn KEIN DB-Eintrag passt: "db_name" null und "per100" mit realistischen Nährwerten pro 100 g. Beachte Markennamen (z.B. More Nutrition, Kühne). Unbekannte Salatwürzen/Essig-Dressings sind meist sehr kalorienarm.
+5. "name" ist ein kurzer deutscher Name der Zutat.
+
+Antworte nur mit JSON in genau diesem Format:
+{"items":[{"name":"Magerquark","amount_g":250,"db_name":"Magerquark Kaufland","per100":null},{"name":"Gurke","amount_g":135,"db_name":null,"per100":{"kcal":12,"carbs":1.8,"protein":0.6,"sugar":1.7}}]}`;
+
+  const parsed = await callGemini([{ text: prompt }]);
+  const list = Array.isArray(parsed) ? parsed : parsed.items;
+  if (!Array.isArray(list) || !list.length) throw new Error('Keine Lebensmittel erkannt');
+
+  return list.map(it => {
+    const grams = parseFloat(it.amount_g);
+    if (!grams || grams <= 0) throw new Error(`Keine Menge für "${it.name}"`);
+    if (it.db_name) {
+      const food = allFoods.find(f => normalize(f.name) === normalize(it.db_name)) || findFood(it.db_name);
+      if (food) return itemFromFood(food, grams);
+    }
+    const p = it.per100;
+    if (!p || typeof p.kcal !== 'number') throw new Error(`Keine Nährwerte für "${it.name}"`);
+    const g = grams / 100;
+    return {
+      name: it.name,
+      amount_g: round1(grams),
+      kcal: round1(p.kcal * g),
+      carbs: round1((p.carbs || 0) * g),
+      protein: round1((p.protein || 0) * g),
+      sugar: round1((p.sugar || 0) * g),
+      source: 'est',
+      per100: { kcal: round1(p.kcal), carbs: round1(p.carbs || 0), protein: round1(p.protein || 0), sugar: round1(p.sugar || 0) }
+    };
+  });
 }
 
 async function parseFood() {
@@ -794,63 +976,42 @@ async function parseFood() {
   const btn = document.getElementById('logBtn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   try {
-    // 1. Try local match first — no API call needed
-    const local = tryLocalMatch(input);
-    if (local) {
-      pendingEntry = local; pendingIsNewFood = false;
-      showPreview(local);
-      return;
-    }
-
-    // 2. Fall back to Gemini for unknown foods or complex inputs
-    const foodsCtx = allFoods.length
-      ? 'Bekannte Lebensmittel (Makros pro 100g):\n' + allFoods.map(f =>
-          `- ${f.name}: ${f.kcal} kcal, ${f.carbs}g KH, ${f.protein}g Eiweiß, ${f.sugar}g Zucker (Standard: ${f.default_amount_g}g)`).join('\n')
-      : 'Keine Lebensmittel gespeichert.';
-
-    const prompt = `Du bist ein Ernährungs-Assistent. Analysiere folgende Eingabe und berechne die Nährstoffe.
-
-${foodsCtx}
-
-Eingabe: "${input}"
-
-Aufgabe:
-1. Erkenne alle Lebensmittel und Mengen.
-2. Wenn ein Lebensmittel aus der Datenbank passt, nutze dessen Makros skaliert auf die genannte Menge.
-3. Sonst schätze die Nährstoffe anhand deines Wissens.
-4. Summiere alles zu einem Gesamteintrag.
-
-Antworte NUR mit einem JSON-Objekt ohne Backticks:
-{"food_name":"Kurze Beschreibung","amount_g":Gesamtgewicht oder null,"kcal":Zahl,"carbs":Zahl,"protein":Zahl,"sugar":Zahl,"is_new_food":true/false,"matched_food_name":"Name oder null"}`;
-
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-    });
-    if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!raw) throw new Error('Leere Antwort von Gemini');
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Kein JSON in Antwort');
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (typeof parsed.kcal !== 'number') throw new Error('Ungültige Nährwerte');
-    pendingEntry = parsed; pendingIsNewFood = parsed.is_new_food;
-    showPreview(parsed);
-  } catch(e) {
-    console.error('Gemini Fehler:', e);
+    const items = tryLocalItems(input) || await geminiItems(input);
+    pendingEntry = { items };
+    showPreview(items);
+  } catch (e) {
+    console.error('Parse-Fehler:', e);
     showToast(`Fehler: ${e.message || 'Bitte nochmal versuchen.'}`, 'err');
   } finally {
     btn.disabled = false; btn.textContent = 'Einloggen';
   }
 }
-function showPreview(p) {
-  document.getElementById('previewName').textContent = p.food_name;
-  document.getElementById('pvKcal').value = Math.round(p.kcal * 10) / 10;
-  document.getElementById('pvCarbs').value = Math.round(p.carbs * 10) / 10;
-  document.getElementById('pvProtein').value = Math.round(p.protein * 10) / 10;
-  document.getElementById('pvSugar').value = Math.round(p.sugar * 10) / 10;
+
+function entryName(items) {
+  if (items.length === 1) return items[0].name;
+  return items.map(i => i.name).join(', ');
+}
+
+function showPreview(items) {
+  const sum = k => items.reduce((a, i) => a + (i[k] || 0), 0);
+  document.getElementById('previewName').value = entryName(items);
+  document.getElementById('previewItems').innerHTML = items.map(i => `<div class="item-row">
+      <span class="item-row-name">${escapeHtml(i.name)}</span>
+      <span class="item-row-amount">${Math.round(i.amount_g)} g</span>
+      <span class="item-badge ${i.source}">${i.source === 'db' ? 'DB' : 'geschätzt'}</span>
+      <span class="item-row-kcal">${Math.round(i.kcal)} kcal</span>
+    </div>`).join('');
+  document.getElementById('pvKcal').value = round1(sum('kcal'));
+  document.getElementById('pvCarbs').value = round1(sum('carbs'));
+  document.getElementById('pvProtein').value = round1(sum('protein'));
+  document.getElementById('pvSugar').value = round1(sum('sugar'));
+
+  const est = items.filter(i => i.source === 'est');
+  pendingIsNewFood = est.length > 0;
+  document.getElementById('saveToFoods').checked = false;
+  document.getElementById('saveToFoodsLabel').textContent = est.length === 1
+    ? `"${est[0].name}" mit geschätzten Werten speichern`
+    : `${est.length} geschätzte Lebensmittel speichern`;
   document.getElementById('saveToFoodsRow').style.display = pendingIsNewFood ? 'flex' : 'none';
   document.getElementById('parsePreview').classList.add('visible');
 }
@@ -858,30 +1019,108 @@ function cancelPreview() {
   document.getElementById('parsePreview').classList.remove('visible'); pendingEntry = null;
 }
 async function confirmEntry() {
+  if (!pendingEntry) return;
   const kcal = parseFloat(document.getElementById('pvKcal').value) || 0;
   const carbs = parseFloat(document.getElementById('pvCarbs').value) || 0;
   const protein = parseFloat(document.getElementById('pvProtein').value) || 0;
   const sugar = parseFloat(document.getElementById('pvSugar').value) || 0;
-  const foodName = document.getElementById('previewName').textContent;
-  const amount = pendingEntry?.amount_g || null;
-  if (pendingIsNewFood && document.getElementById('saveToFoods').checked) {
-    const base = amount || 100; const factor = 100 / base;
-    await sbFetch('foods', 'POST', {
-      name: foodName,
-      kcal: Math.round(kcal * factor * 10) / 10,
-      carbs: Math.round(carbs * factor * 10) / 10,
-      protein: Math.round(protein * factor * 10) / 10,
-      sugar: Math.round(sugar * factor * 10) / 10,
-      default_amount_g: base
-    });
-    await loadFoods();
+  const items = pendingEntry.items || [];
+  const foodName = document.getElementById('previewName').value.trim() || entryName(items);
+  const amount = items.length ? Math.round(items.reduce((a, i) => a + (i.amount_g || 0), 0)) : null;
+  try {
+    if (pendingIsNewFood && document.getElementById('saveToFoods').checked) {
+      for (const it of items.filter(i => i.source === 'est')) {
+        await sbFetch('foods', 'POST', { name: it.name, ...it.per100, default_amount_g: Math.round(it.amount_g) || 100 });
+      }
+      await loadFoods();
+    }
+    await sbFetch('log_entries', 'POST', { date: TODAY, food_name: foodName, amount_g: amount, kcal, carbs, protein, sugar });
+  } catch (e) {
+    console.error(e);
+    showToast(`Fehler beim Speichern: ${e.message}`, 'err');
+    return;
   }
-  await sbFetch('log_entries', 'POST', { date: TODAY, food_name: foodName, amount_g: amount, kcal, carbs, protein, sugar });
   document.getElementById('foodInput').value = '';
   document.getElementById('parsePreview').classList.remove('visible');
   pendingEntry = null;
   await loadTodayEntries(); renderEntries(); renderTotals();
   showToast('Eingetragen!', 'ok');
+}
+
+// SCREENSHOT EINER ZUTATENLISTE (z.B. WhatsApp-Nachricht)
+async function readListFromImage(inputEl) {
+  const file = inputEl.files?.[0];
+  inputEl.value = '';
+  if (!file) return;
+  const btn = document.getElementById('shotBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Screenshot wird gelesen…';
+  try {
+    const b64 = await fileToJpegBase64(file);
+    const prompt = `Auf dem Bild steht eine Liste von Lebensmitteln mit Mengen (z.B. ein Chat-Screenshot).
+Schreibe die Liste exakt ab, eine Zutat pro Zeile im Format "<Menge><Einheit> <Name>", z.B. "250g Quark".
+Übernimm Abkürzungen und Mengen genau so, wie sie dastehen. Ignoriere Uhrzeiten, Emojis und sonstigen Text.
+Antworte nur mit JSON: {"lines":["...","..."]}`;
+    const r = await callGemini([{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: prompt }]);
+    const lines = (r.lines || []).map(l => String(l).trim()).filter(Boolean);
+    if (!lines.length) throw new Error('Keine Zutaten gefunden');
+    const ta = document.getElementById('foodInput');
+    ta.value = lines.join('\n'); autoResize(ta);
+    btn.disabled = false; btn.textContent = 'Aus Screenshot oder Foto einlesen';
+    await parseFood();
+  } catch (e) {
+    console.error(e);
+    showToast(`Screenshot nicht lesbar: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Aus Screenshot oder Foto einlesen';
+  }
+}
+
+// ETIKETT SCANNEN
+function fileToJpegBase64(file, maxSide = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.onerror = () => reject(new Error('Bild konnte nicht gelesen werden'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+async function scanLabel(inputEl) {
+  const file = inputEl.files?.[0];
+  inputEl.value = '';
+  if (!file) return;
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Etikett wird gelesen…';
+  try {
+    const b64 = await fileToJpegBase64(file);
+    const prompt = `Lies die Nährwerttabelle auf diesem Foto einer Lebensmittelverpackung aus.
+Gib die Werte PRO 100 g bzw. 100 ml (bei Konserven pro 100 g Abtropfgewicht, falls so angegeben) zurück.
+Steht nur kJ da, rechne kcal = kJ / 4,184. "Kohlenhydrate" = carbs, "davon Zucker" = sugar, "Eiweiß" = protein.
+Wenn Produktname oder Marke erkennbar sind, gib einen kurzen deutschen Namen, sonst null.
+Wenn eine Portionsgröße angegeben ist, gib sie in g an, sonst null.
+Antworte nur mit JSON: {"name":string|null,"kcal":Zahl,"carbs":Zahl,"sugar":Zahl,"protein":Zahl,"portion_g":Zahl|null}`;
+    const r = await callGemini([{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: prompt }]);
+    if (typeof r.kcal !== 'number') throw new Error('Keine Nährwerte erkannt');
+    if (r.name && !document.getElementById('fName').value.trim()) document.getElementById('fName').value = r.name;
+    document.getElementById('fKcal').value = round1(r.kcal);
+    document.getElementById('fCarbs').value = round1(r.carbs);
+    document.getElementById('fSugar').value = round1(r.sugar);
+    document.getElementById('fProtein').value = round1(r.protein);
+    if (r.portion_g) document.getElementById('fAmount').value = Math.round(r.portion_g);
+    showToast('Werte übernommen. Bitte kurz prüfen.', 'ok');
+    document.getElementById('fName').focus();
+  } catch (e) {
+    console.error(e);
+    showToast(`Etikett nicht lesbar: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Nährwert-Etikett fotografieren';
+  }
 }
 
 // WEEK VIEW
@@ -901,7 +1140,7 @@ function getPeriodDays() {
   const days = [];
   for (let i = currentPeriod - 1; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
+    days.push(localDateStr(d));
   }
   return days;
 }
